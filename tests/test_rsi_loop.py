@@ -116,3 +116,79 @@ class LoopTests(unittest.TestCase):
     def test_output_within_objectives_rejected(self):
         with self.assertRaisesRegex(ValueError, 'outside'):
             rsi.loop(self.source, self.objectives, [], self.objectives / 'results')
+
+    def test_timeout_cannot_poison_next_objective_baseline(self):
+        code = "from pathlib import Path\nimport os, time\np = Path(os.environ['RSI_CANDIDATE_ROOT']).parent.parent / 'frozen/objectives/test_objective.py'\np.write_text(p.read_text().replace('m.VALUE, 1', 'm.VALUE, 0').replace('m.VALUE, 2', 'm.VALUE, 0'))\ntime.sleep(10)\n"
+        result = self.run_loop([self.candidate(1, extra=code), self.candidate(0)], timeout=.4)
+        self.assertEqual(result['stop'], 'evaluation_integrity_changed')
+        self.assertEqual(len(result['rounds']), 1)
+        self.assertIsNone(result['accepted'])
+
+    def test_normal_exit_cleans_child_processes(self):
+        import signal
+        import time
+        pidfile = self.root / 'child-pids'
+        code = "import subprocess, sys\nfrom pathlib import Path\np = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\nwith Path(" + repr(str(pidfile)) + ").open('a') as f: f.write(str(p.pid) + '\\n')\n"
+        try:
+            result = self.run_loop([self.candidate(2, extra=code)])
+            self.assertEqual(result['stop'], 'objective_satisfied')
+            pids = [int(p) for p in pidfile.read_text().splitlines()]
+            self.assertTrue(pids)
+            time.sleep(.05)
+            for pid in pids:
+                status = Path(f'/proc/{pid}/stat')
+                if status.exists():
+                    self.assertEqual(status.read_text().split()[2], 'Z', f'Child {pid} still running')
+        finally:
+            if pidfile.exists():
+                for pid in map(int, pidfile.read_text().splitlines()):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+    def test_interruption_also_cleans_process_group(self):
+        import signal
+        import time
+        from unittest import mock
+        # A trusted evaluator starts a child; interrupt the caller's wait.
+        folder = self.root / 'interrupt'
+        folder.mkdir()
+        marker = folder / 'started'
+        driver = folder / 'driver.py'
+        driver.write_text("import subprocess, sys, time\nfrom pathlib import Path\np=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\nPath(" + repr(str(marker)) + ").write_text(str(p.pid))\ntime.sleep(30)\n")
+        original_popen = rsi.subprocess.Popen
+        processes = []
+        def start(*args, **kwargs):
+            proc = original_popen(*args, **kwargs)
+            processes.append(proc)
+            original_wait = proc.wait
+            interrupted = False
+            def wait(*args, **kwargs):
+                nonlocal interrupted
+                if not interrupted:
+                    interrupted = True
+                    deadline = time.monotonic() + 2
+                    while not marker.exists() and time.monotonic() < deadline:
+                        time.sleep(.01)
+                    raise KeyboardInterrupt()
+                return original_wait(*args, **kwargs)
+            proc.wait = wait
+            return proc
+        try:
+            with mock.patch.object(rsi.subprocess, 'Popen', side_effect=start):
+                with self.assertRaises(KeyboardInterrupt):
+                    rsi.run_eval(driver, self.source, self.objectives, folder, 5)
+            self.assertTrue(marker.exists())
+            self.assertIsNotNone(processes[0].poll(), 'Evaluator survived interruption')
+            time.sleep(.05)
+            child_status = Path('/proc') / marker.read_text() / 'stat'
+            if child_status.exists():
+                self.assertEqual(child_status.read_text().split()[2], 'Z')
+        finally:
+            for proc in processes:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.wait()

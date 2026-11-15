@@ -47,24 +47,52 @@ def evaluate(root, objectives, result):
     Path(result).write_text(json.dumps(rows), encoding='utf-8')
 
 
-def run_eval(driver, root, objectives, folder, timeout):
-    protected = [driver, *objectives.rglob('*.py'), *(root / 'tests').rglob('*.py')]
-    hashes = {p: digest(p) for p in protected}
+def evaluation_hashes(driver, root, objectives):
+    """Stable labels allow one frozen fingerprint across candidate directories."""
+    paths = {'driver': driver}
+    for label, directory in [('objective', objectives), ('regression', root / 'tests')]:
+        for path in directory.rglob('*.py'):
+            paths[label + '/' + path.relative_to(directory).as_posix()] = path
+    return {name: digest(path) for name, path in paths.items()}
+
+
+def run_eval(driver, root, objectives, folder, timeout, expected_hashes=None):
+    # The loop supplies ONE fingerprint frozen before baseline evaluation.
+    if expected_hashes is None:
+        expected_hashes = evaluation_hashes(driver, root, objectives)
+    def intact():
+        try:
+            return evaluation_hashes(driver, root, objectives) == expected_hashes
+        except OSError:
+            return False
+    if not intact():
+        return {'error': 'evaluation_integrity_changed'}
     result = folder / 'evaluation.json'
     # No API keys, tokens, proxies, PYTHONPATH or user startup settings inherited.
     env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'SYSTEMROOT') if key in os.environ}
     env.update(HOME=str(folder), TMPDIR=str(folder), RSI_CANDIDATE_ROOT=str(root))
+    timed_out = False
     with (folder / 'evaluation.log').open('wb') as log:
         proc = subprocess.Popen([sys.executable, '-I', str(driver), '--evaluate', str(root), str(objectives), str(result)],
                                 cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
-            proc.wait()
-            return {'error': 'timeout'}
-    if any(not p.is_file() or digest(p) != checksum for p, checksum in hashes.items()):
+            timed_out = True
+        finally:
+            # Also reap background descendants on success and caller interruption.
+            # Processes that deliberately detach require a real OS sandbox.
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            finally:
+                proc.wait()
+    # Integrity takes priority even on timeout: never reuse a polluted evaluator.
+    if not intact():
         return {'error': 'evaluation_integrity_changed'}
+    if timed_out:
+        return {'error': 'timeout'}
     if proc.returncode or not result.exists():
         return {'error': 'evaluation_failed', 'returncode': proc.returncode}
     return json.loads(result.read_text(encoding='utf-8'))
@@ -126,12 +154,14 @@ def loop(source, objectives, candidates, output, rounds=3, patience=2, timeout=1
         copy_tree(objectives, frozen / 'objectives')
         baseline = output / 'baseline'
         copy_tree(source, baseline)
+        expected_hashes = evaluation_hashes(frozen / 'driver.py', baseline, frozen / 'objectives')
+        report['evaluation_sha256'] = expected_hashes
         report['baseline_target_sha256'] = digest(baseline / TARGET)
         report['objective_sha256'] = {str(p.relative_to(frozen)): digest(p) for p in (frozen / 'objectives').rglob('*.py')}
         if remaining() <= 0:
             report['stop'] = 'total_budget'
             return report
-        best = run_eval(frozen / 'driver.py', baseline, frozen / 'objectives', output, remaining())
+        best = run_eval(frozen / 'driver.py', baseline, frozen / 'objectives', output, remaining(), expected_hashes)
         report['baseline'] = best
         if not eligible(best):
             report['stop'] = 'total_budget' if remaining() <= 0 else 'invalid_baseline_or_objectives'
@@ -150,7 +180,7 @@ def loop(source, objectives, candidates, output, rounds=3, patience=2, timeout=1
             copy_tree(baseline, tree)
             (tree / TARGET).write_bytes(payload)
             # Every candidate starts from immutable baseline, not previous side effects.
-            result = run_eval(frozen / 'driver.py', tree, frozen / 'objectives', folder, max(.001, remaining()))
+            result = run_eval(frozen / 'driver.py', tree, frozen / 'objectives', folder, max(.001, remaining()), expected_hashes)
             improved = (eligible(result) and result['regression']['total'] == best['regression']['total']
                         and result['objective']['total'] == best['objective']['total']
                         and failures(result['objective']) < failures(best['objective']))
