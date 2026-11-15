@@ -1,0 +1,20 @@
+{
+  "name": "tender-writing",
+  "version": "0.1.0",
+  "description": "中文标书研读、资料复用、目录与正文写作、审查导出工作流。",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "标书写作工作台",
+    "shortDescription": "从招标研读到逐章写作与审查导出",
+    "longDescription": "提供六个工作流技能和本地文件工具；结合当前模型进行标书研读与写作，以来源证据和覆盖矩阵支持核验。",
+    "category": "Business & Operations",
+    "capabilities": ["Read", "Write"],
+    "logo": "./assets/icon.svg",
+    "composerIcon": "./assets/icon.svg",
+    "defaultPrompt": [
+      "请根据我提供的招标文件，建立标书项目，先输出招标研读和投标准备清单，再生成目录并逐章写作。",
+      "请整理企业资质和历史标书，建立带来源、有效期和适用范围的企业资料库。",
+      "请审查这份投标文件，逐项给出招标依据、投标响应位置、证据缺口和修改建议。"
+    ]
+  }
+}

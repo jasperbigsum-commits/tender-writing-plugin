@@ -1,0 +1,8 @@
+{
+  "interface": {
+    "display_name": "招标研读",
+    "short_description": "拆解原文要求、评分点与投标准备事项",
+    "default_prompt": "请完整研读招标及澄清文件，提取带原文定位的要求、评分项和风险，列出准备清单。"
+  },
+  "policy": {"allow_implicit_invocation": true}
+}

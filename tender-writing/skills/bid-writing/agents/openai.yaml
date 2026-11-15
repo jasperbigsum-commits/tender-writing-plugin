@@ -1,0 +1,8 @@
+{
+  "interface": {
+    "display_name": "标书写作工作台",
+    "short_description": "组织从资料沉淀到审查导出的六步流程",
+    "default_prompt": "请根据招标文件建立项目，先研读和整理要求，再生成目录、逐章写作并审查导出。"
+  },
+  "policy": {"allow_implicit_invocation": true}
+}

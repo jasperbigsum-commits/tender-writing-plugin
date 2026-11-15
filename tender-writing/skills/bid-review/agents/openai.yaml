@@ -1,0 +1,8 @@
+{
+  "interface": {
+    "display_name": "投标自查与导出",
+    "short_description": "检查响应、证据、关键字段和最终文档",
+    "default_prompt": "请按招标原文逐项审查投标文件，列出来源、响应位置、缺口及建议，完成可验证的文档导出。"
+  },
+  "policy": {"allow_implicit_invocation": true}
+}

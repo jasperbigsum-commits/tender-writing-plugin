@@ -1,0 +1,53 @@
+{
+  "observed_on": "2026-11-15",
+  "repository": "hello-fengsir/godbiao",
+  "default_branch_observed": "main",
+  "latest_visible_commit": "73d732cbe863c287539debbc6f9f99bf54a3e870",
+  "latest_visible_commit_utc": "2026-06-14T01:40:08Z",
+  "executed_remote_code": false,
+  "deployed": false,
+  "read_method": "GitHub connector and public repository page",
+  "license_status": {
+    "license_file": "MIT",
+    "readme_restriction": "README and docs/PRODUCT.md say no commercial use",
+    "assessment": "Conflicting repository text; commercial reuse not treated as clarified"
+  },
+  "versions_observed": {"readme": "v2.1", "pyproject": "1.0.0", "product_doc": "v1.0"},
+  "files_read": [
+    {"path": "app.py", "lines": 335, "blob_sha": "cc7bc155a9c4f1bcc35dbeacdb38471d1c38f136"},
+    {"path": "bid_api.py", "lines": 333, "blob_sha": "1d4a310ccf8e91bd69aa00eedb78261759ecfed4"},
+    {"path": "models.py", "lines": 311, "blob_sha": "07ae27a9665b3687c746d4da69b7ff9b20b439f3"},
+    {"path": "llm_client.py", "lines": 435, "blob_sha": "608fe2d7d6275180a1e5611cfe522f0db29882a3"},
+    {"path": "parser.py", "lines": 287, "blob_sha": "f6d12e87801af244e590a44823163d6c6c8a61e5"},
+    {"path": "config.py", "lines": 104, "blob_sha": "df32bfa9320bbda1aaae7600f0fb0ff5ab243b81"},
+    {"path": "README.md", "lines": 179, "blob_sha": "3c6b524874ac886d815f544da82c5b8a0f1b6b13"},
+    {"path": "docs/PRODUCT.md", "lines": 191, "blob_sha": "f987e6a332c6671c34760b382880d8808783c25a"},
+    {"path": "LICENSE", "lines": 22, "blob_sha": "d47daee0f21d955f19312987f8cfc9872fc25a50"},
+    {"path": "pyproject.toml", "lines": 38, "blob_sha": "0c85d0f35779597719285b5068ce54fe491e1a6a"},
+    {"path": "Dockerfile", "lines": 23, "blob_sha": "def9d7f50ac365af3fb5b16257bdbf30290f391a"},
+    {"path": "docker-compose.yml", "lines": 23, "blob_sha": "76ffea214a36a491fa722eec3946d98d5d76a26d"},
+    {"path": "templates/review.html", "lines": 241, "blob_sha": "cfc137206d054d922369904a7809bbcae0c6419e"},
+    {"path": "templates/result.html", "lines": 330, "blob_sha": "b0aef07710ffe87109f0cbaa68d07806725b1fab"},
+    {"path": "templates/bidding.html", "lines": 984, "blob_sha": "cd45991da588834a962ab4453ac9e8def58f6748"},
+    {"path": "templates/index.html", "lines": 502, "blob_sha": "2899df86f201865ec7e9f724cd91d6c297deae05"}
+  ],
+  "principal_findings": [
+    "Review path compares one bid response or that response's technical/business split against requirements",
+    "No multi-bidder ranking or weighted procurement scoring engine evidenced in reviewed schema and routes",
+    "Bidding path manages parameter catalogs and exports a two-column Word technical parameter name table",
+    "Review headline uses satisfied-item percentage with an 80-percent threshold; no mandatory-veto branch in that logic",
+    "Format score is model output based on extracted text, not rendered-page or font-metric validation",
+    "Three analysis calls are sequential in current app.py despite parallel wording in documents",
+    "Model inputs are truncated to fixed character limits without a corresponding full-scope coverage manifest",
+    "Input text and results are stored in SQLite and sent in model requests; local parsing does not establish local inference",
+    "No user/organization ownership model or per-item human adjudication trail evidenced in reviewed application code",
+    "Global recent-three-job trimming is unsuitable as a project archive policy without further design"
+  ],
+  "design_implications": [
+    "Separate procurement authoring, bidder authoring and assisted evaluation roles",
+    "Freeze requirement and scoring rule versions before evaluation",
+    "Judge mandatory requirements before ordinary coverage percentages",
+    "Preserve source locators, extraction completeness and explicit partial-result status",
+    "Record actual human review and keep supplier evidence isolated"
+  ]
+}

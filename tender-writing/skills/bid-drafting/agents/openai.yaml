@@ -1,0 +1,8 @@
+{
+  "interface": {
+    "display_name": "逐章写作",
+    "short_description": "根据要求与企业证据撰写可核验的投标响应",
+    "default_prompt": "请根据要求、证据和写作计划逐章撰写，缺失事实保留待填项，同步维护逐项响应与偏离。"
+  },
+  "policy": {"allow_implicit_invocation": true}
+}

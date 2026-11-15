@@ -1,0 +1,27 @@
+{
+  "observed_on": "2026-11-15",
+  "repository": "William-GuoWei/ProposalLLM",
+  "default_branch_observed": "main",
+  "latest_visible_commit": "a63290bd12a3ac6c6b52638a42d3c69f46d8c667",
+  "latest_visible_commit_utc": "2024-11-14T11:16:40Z",
+  "read_method": "GitHub connector and public GitHub webpage",
+  "executed_remote_code": false,
+  "deployed": false,
+  "license_file_identification": "Apache-2.0",
+  "files_read": [
+    {"path": "Generate.py", "blob_sha": "2c7855f055a7f1712953b09c017c4907c37839dd", "lines": 556},
+    {"path": "Extract_Word.py", "blob_sha": "273a61a06796ef84056fdaf07a0e28408e2fd1c6", "lines": 203},
+    {"path": "requirements.txt", "blob_sha": "456995cff0feb074f9fde353fbefd5fdb852b60f"},
+    {"path": "LICENSE", "blob_sha": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64"},
+    {"path": "README.md", "method": "public repository page"}
+  ],
+  "principal_findings": [
+    "Excel requirements matrix drives Word generation and chapter-number backfill",
+    "Module selection uses manually entered file-number mapping rather than semantic/vector retrieval",
+    "Prompt presupposes a positive support response before locating corresponding product material",
+    "Missing product module falls back to generic model generation",
+    "Input-named workbook and target document are saved in place",
+    "Table-cell images are skipped in extraction/copy code",
+    "Possible uninitialized local current_level in Generate.py copy function; static inference only"
+  ]
+}

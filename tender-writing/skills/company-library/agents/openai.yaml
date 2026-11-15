@@ -1,0 +1,8 @@
+{
+  "interface": {
+    "display_name": "企业资料与历史标书",
+    "short_description": "整理可追溯、可核验的企业证明与写作模块",
+    "default_prompt": "请整理企业资料和历史标书，建立带来源、主体、有效期与适用范围的材料台账。"
+  },
+  "policy": {"allow_implicit_invocation": true}
+}

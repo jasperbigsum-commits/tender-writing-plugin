@@ -1,0 +1,32 @@
+{
+  "observed_on": "2026-11-15",
+  "repository": "FB208/OpenBidKit_Yibiao",
+  "snapshot_commit": "77a38f07db822daee0e4be80b84c2281c73d646e",
+  "latest_visible_functional_commit": "51619d06ef807773da9828234a015a5e8b553a94",
+  "release_observed": "v2.32.3",
+  "method": "GitHub connector read-only source inspection; web release-page inspection; no execution",
+  "files_read": [
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "client/package.json",
+    "client/electron/services/fileService.cjs",
+    "client/electron/services/knowledgeBaseService.cjs",
+    "client/electron/services/knowledgeBaseStore.cjs",
+    "client/electron/services/contentGenerationTask.cjs",
+    "client/electron/services/contentGenerationAgent.cjs",
+    "client/electron/services/rejectionCheckTask.cjs",
+    "client/electron/services/duplicateCheckService.cjs",
+    "client/electron/services/technicalPlanExport.cjs",
+    "client/electron/services/taskService.cjs",
+    "client/src/shared/types/outline.ts",
+    "使用说明/使用/04-标书查重.md",
+    "使用说明/更新日志/v2版本更新日志.md"
+  ],
+  "limits": [
+    "Source files were fetched; key implementation ranges were inspected rather than an exhaustive code audit.",
+    "No model output quality, OCR accuracy, rendering fidelity, runtime security, performance or cost was independently tested.",
+    "Default-branch commit and latest published release are different snapshots.",
+    "License is identified from repository files; no legal conclusion is made."
+  ]
+}
