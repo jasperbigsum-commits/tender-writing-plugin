@@ -34,6 +34,10 @@ codex plugin add tender-writing@tender-writing-local
 
 > 用标书写作工作台根据这些招标、澄清和企业文件建立项目，先完整研读并输出要求与缺口，再编目录、逐章写作并审查导出。
 
+## 有界自动迭代
+
+[本地候选迭代说明](docs/有界本地迭代.md)：固定评测、限轮与超时、保留/回退和逐轮记录。仅评估可信本地候选，不调用模型、不自动发布，也不替代人工业务审核。
+
 ## 开发和验收
 
 使用Python 3.10及以上；Word/PDF相关能力需 `tender-writing/requirements.txt` 中的可选依赖。Codex环境优先使用bundled解释器。

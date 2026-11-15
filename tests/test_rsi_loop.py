@@ -1,0 +1,118 @@
+"""Independent synthetic tests for bounded candidate selection (no network/model)."""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+
+SPEC = importlib.util.spec_from_file_location('rsi_loop', Path(__file__).resolve().parents[1] / 'tools/rsi_loop.py')
+rsi = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(rsi)
+
+
+@unittest.skipUnless(os.name == 'posix', 'POSIX-only process-group runner')
+class LoopTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.source = self.root / 'source'
+        (self.source / rsi.TARGET).parent.mkdir(parents=True)
+        (self.source / rsi.TARGET).write_text('VALUE = 0\nSAFE = True\n')
+        (self.source / 'tests').mkdir()
+        self.objectives = self.root / 'objectives'
+        self.objectives.mkdir()
+        load = "import importlib.util, os\nfrom pathlib import Path\nimport unittest\ns = importlib.util.spec_from_file_location('candidate', Path(os.environ['RSI_CANDIDATE_ROOT']) / '" + str(rsi.TARGET) + "')\nm = importlib.util.module_from_spec(s)\ns.loader.exec_module(m)\n"
+        (self.source / 'tests/test_guard.py').write_text(load + 'class Guard(unittest.TestCase):\n def test_safe(self): self.assertTrue(m.SAFE)\n')
+        (self.objectives / 'test_objective.py').write_text(load + 'class Objective(unittest.TestCase):\n def test_one(self): self.assertGreaterEqual(m.VALUE, 1)\n def test_two(self): self.assertGreaterEqual(m.VALUE, 2)\n')
+
+    def candidate(self, value, safe=True, extra=''):
+        path = self.root / f'candidate-{value}-{safe}.py'
+        path.write_text(f'VALUE = {value}\nSAFE = {safe}\n' + extra)
+        return path
+
+    def run_loop(self, candidates, **kw):
+        return rsi.loop(self.source, self.objectives, candidates, self.root / 'result', **kw)
+
+    def test_improve_then_reject_then_finish_without_changing_source(self):
+        before = (self.source / rsi.TARGET).read_bytes()
+        result = self.run_loop([self.candidate(1), self.candidate(2, False), self.candidate(2)])
+        self.assertEqual([r['decision'] for r in result['rounds']], ['keep', 'discard', 'keep'])
+        self.assertEqual(result['accepted']['round'], 3)
+        self.assertEqual(result['stop'], 'objective_satisfied')
+        self.assertEqual((self.source / rsi.TARGET).read_bytes(), before)
+        self.assertEqual(json.loads((self.root / 'result/report.json').read_text())['stop'], 'objective_satisfied')
+
+    def test_patience_retains_last_good_candidate(self):
+        result = self.run_loop([self.candidate(1), self.candidate(0), self.candidate(-1)])
+        self.assertEqual(result['stop'], 'no_improvement')
+        self.assertEqual(result['accepted']['round'], 1)
+
+    def test_round_budget(self):
+        result = self.run_loop([self.candidate(1), self.candidate(2)], rounds=1, patience=1)
+        self.assertEqual(len(result['rounds']), 1)
+        self.assertEqual(result['stop'], 'round_limit')
+
+    def test_timeout_discard(self):
+        result = self.run_loop([self.candidate(1, extra='import time\ntime.sleep(10)\n')], timeout=.4)
+        self.assertEqual(result['rounds'][0]['evaluation']['error'], 'timeout')
+        self.assertIsNone(result['accepted'])
+
+    def test_bad_baseline_stops_before_candidates(self):
+        (self.source / rsi.TARGET).write_text('VALUE=0\nSAFE=False\n')
+        result = self.run_loop([self.candidate(2)])
+        self.assertEqual(result['stop'], 'invalid_baseline_or_objectives')
+        self.assertEqual(result['rounds'], [])
+
+    def test_symlink_rejected(self):
+        (self.source / 'leak').symlink_to('/tmp')
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            self.run_loop([])
+
+    def test_existing_destination_rejected(self):
+        (self.root / 'result').mkdir()
+        with self.assertRaisesRegex(ValueError, 'must not exist'):
+            self.run_loop([])
+
+    def test_in_tree_output_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'outside'):
+            rsi.loop(self.source, self.objectives, [], self.source / 'results')
+
+    def test_invalid_budget_rejected(self):
+        with self.assertRaises(ValueError):
+            self.run_loop([], rounds=0)
+        with self.assertRaises(ValueError):
+            self.run_loop([], timeout=float('nan'))
+
+    def test_objective_already_passes(self):
+        (self.source / rsi.TARGET).write_text('VALUE=2\nSAFE=True\n')
+        self.assertEqual(self.run_loop([])['stop'], 'objective_already_satisfied')
+
+    def test_evaluator_modification_rejected(self):
+        code = "from pathlib import Path\nimport os\np = Path(os.environ['RSI_CANDIDATE_ROOT']) / 'tests/test_guard.py'\np.write_text(p.read_text() + '\\n# changed\\n')\n"
+        result = self.run_loop([self.candidate(2, extra=code)])
+        self.assertEqual(result['rounds'][0]['evaluation']['error'], 'evaluation_integrity_changed')
+        self.assertEqual(result['stop'], 'evaluation_integrity_changed')
+        self.assertIsNone(result['accepted'])
+
+    def test_total_budget_stops_baseline(self):
+        (self.source / rsi.TARGET).write_text('import time\ntime.sleep(10)\nVALUE=0\nSAFE=True\n')
+        result = self.run_loop([self.candidate(2)], budget=.2)
+        self.assertEqual(result['stop'], 'total_budget')
+        self.assertEqual(result['rounds'], [])
+
+    def test_missing_objectives_rejected(self):
+        (self.objectives / 'test_objective.py').unlink()
+        with self.assertRaisesRegex(ValueError, 'independent objective'):
+            self.run_loop([])
+
+    def test_symlink_candidate_rejected(self):
+        link = self.root / 'linked.py'
+        link.symlink_to(self.candidate(2))
+        with self.assertRaisesRegex(ValueError, 'regular local file'):
+            self.run_loop([link])
+
+    def test_output_within_objectives_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'outside'):
+            rsi.loop(self.source, self.objectives, [], self.objectives / 'results')
