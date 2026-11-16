@@ -694,6 +694,11 @@ def export_document(root, output, mode="draft"):
     if not chapters:
         raise BidError("目录为空，无法导出")
     drafts = {d["chapter_id"]: d for d in state["draft.json"]}
+    # Container headings may legitimately have no body. Keep the leaf fallback
+    # below, but never invent a missing-body warning for a heading-only volume.
+    container_ids = {chapter.get("parent_id") for chapter in state["outline.json"]}
+    for chapter_id in container_ids - {None}:
+        drafts.setdefault(chapter_id, {"content": ""})
     output = Path(output).resolve()
     if not output.is_relative_to(root / "outputs"):
         raise BidError("导出文件须位于项目 outputs 目录中")
