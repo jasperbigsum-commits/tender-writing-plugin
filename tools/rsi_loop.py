@@ -12,6 +12,7 @@ import signal
 import subprocess
 import sys
 import time
+import tempfile
 import unittest
 
 TARGET = Path('tender-writing/skills/bid-writing/scripts/bidflow.py')
@@ -91,9 +92,10 @@ def run_eval(driver, root, objectives, folder, timeout, expected_hashes=None):
     result = folder / 'evaluation.json'
     # No API keys, tokens, proxies, PYTHONPATH or user startup settings inherited.
     env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'SYSTEMROOT') if key in os.environ}
-    env.update(HOME=str(folder), TMPDIR=str(folder), RSI_CANDIDATE_ROOT=str(root))
+    env.update(RSI_CANDIDATE_ROOT=str(root), PYTHONDONTWRITEBYTECODE="1")
     timed_out = False
-    with (folder / 'evaluation.log').open('wb') as log:
+    with tempfile.TemporaryDirectory(prefix='evaluation-scratch-', dir=folder) as scratch, (folder / 'evaluation.log').open('wb') as log:
+        env.update(HOME=scratch, TMPDIR=scratch)
         proc = subprocess.Popen([sys.executable, '-I', '-B', str(driver), '--evaluate', str(root), str(objectives), str(result)],
                                 cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:

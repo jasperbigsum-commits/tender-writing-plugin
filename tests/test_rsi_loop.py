@@ -155,6 +155,36 @@ class LoopTests(unittest.TestCase):
                 self.assertEqual(result['stop'], 'evaluation_integrity_changed')
                 self.assertIsNone(result['accepted'])
 
+    def test_scratch_is_fresh_per_evaluation_and_cleaned(self):
+        guard = self.source / 'tests/test_guard.py'
+        guard.write_text(guard.read_text() + "\nclass Scratch(unittest.TestCase):\n def test_scratch(self):\n  p = Path(os.environ['TMPDIR']) / 'run-marker'\n  self.assertFalse(p.exists())\n  p.write_text('scratch only')\n")
+        result = self.run_loop([self.candidate(1), self.candidate(2)])
+        self.assertEqual(result['stop'], 'objective_satisfied')
+        self.assertFalse(list((self.root / 'result').rglob('evaluation-scratch-*')))
+        self.assertFalse(list((self.root / 'result').rglob('run-marker')))
+
+    def test_real_repository_business_baseline_and_candidate(self):
+        # Freeze the actual business suite, not this runner's recursive self-tests.
+        real_source = self.root / 'real-source'
+        rsi.copy_tree(Path(__file__).resolve().parents[1], real_source)
+        (real_source / 'tests/test_rsi_loop.py').unlink()
+        objectives = self.root / 'real-objectives'
+        objectives.mkdir()
+        (objectives / 'test_real_goal.py').write_text(
+            "import os, unittest\nfrom pathlib import Path\n"
+            "class Goal(unittest.TestCase):\n"
+            " def test_marker(self):\n"
+            "  p=Path(os.environ['RSI_CANDIDATE_ROOT']) / " + repr(str(rsi.TARGET)) + "\n"
+            "  self.assertIn('# RSI synthetic marker', p.read_text())\n")
+        candidate = self.root / 'real-candidate.py'
+        candidate.write_bytes((real_source / rsi.TARGET).read_bytes() + b'\n# RSI synthetic marker\n')
+        result = rsi.loop(real_source, objectives, [candidate], self.root / 'real-result', timeout=60)
+        self.assertEqual(result['stop'], 'objective_satisfied', result)
+        self.assertGreaterEqual(result['baseline']['regression']['total'], 47)
+        self.assertEqual(result['rounds'][0]['decision'], 'keep')
+        self.assertFalse((real_source / 'tmp').exists())
+        self.assertFalse((self.root / 'real-result/baseline/tmp').exists())
+
     def test_normal_exit_cleans_child_processes(self):
         import signal
         import time
