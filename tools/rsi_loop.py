@@ -48,12 +48,33 @@ def evaluate(root, objectives, result):
 
 
 def evaluation_hashes(driver, root, objectives):
-    """Stable labels allow one frozen fingerprint across candidate directories."""
-    paths = {'driver': driver}
-    for label, directory in [('objective', objectives), ('regression', root / 'tests')]:
-        for path in directory.rglob('*.py'):
-            paths[label + '/' + path.relative_to(directory).as_posix()] = path
-    return {name: digest(path) for name, path in paths.items()}
+    """Freeze every copied dependency, not just test Python source.
+
+    Fixtures may live outside tests/. Only the candidate target is excluded.
+    Bytecode writes are disabled; tests must write scratch data to
+    TMPDIR, never into these fixed trees. This is integrity checking, not a sandbox.
+    """
+    hashes = {'driver': digest(driver)}
+    for label, directory in [('objective', objectives), ('baseline', root)]:
+        if directory.is_symlink() or not directory.is_dir():
+            raise ValueError('Fixed dependency tree missing or replaced')
+        for current, dirs, files in os.walk(directory, followlinks=False):
+            for name in dirs + files:
+                path = Path(current) / name
+                relative = path.relative_to(directory)
+                key = label + '/' + relative.as_posix()
+                # Never follow a link, even when named like an ignored cache.
+                if path.is_symlink():
+                    raise ValueError('Fixed dependency became a symlink')
+                if label == 'baseline' and relative == TARGET:
+                    continue
+                if path.is_dir():
+                    hashes[key + '/'] = 'directory'
+                elif path.is_file():
+                    hashes[key] = digest(path)
+                else:
+                    raise ValueError('Fixed dependency is not a regular file')
+    return hashes
 
 
 def run_eval(driver, root, objectives, folder, timeout, expected_hashes=None):
@@ -63,7 +84,7 @@ def run_eval(driver, root, objectives, folder, timeout, expected_hashes=None):
     def intact():
         try:
             return evaluation_hashes(driver, root, objectives) == expected_hashes
-        except OSError:
+        except (OSError, ValueError):
             return False
     if not intact():
         return {'error': 'evaluation_integrity_changed'}
@@ -73,7 +94,7 @@ def run_eval(driver, root, objectives, folder, timeout, expected_hashes=None):
     env.update(HOME=str(folder), TMPDIR=str(folder), RSI_CANDIDATE_ROOT=str(root))
     timed_out = False
     with (folder / 'evaluation.log').open('wb') as log:
-        proc = subprocess.Popen([sys.executable, '-I', str(driver), '--evaluate', str(root), str(objectives), str(result)],
+        proc = subprocess.Popen([sys.executable, '-I', '-B', str(driver), '--evaluate', str(root), str(objectives), str(result)],
                                 cwd=root, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             proc.wait(timeout=timeout)
@@ -157,7 +178,7 @@ def loop(source, objectives, candidates, output, rounds=3, patience=2, timeout=1
         expected_hashes = evaluation_hashes(frozen / 'driver.py', baseline, frozen / 'objectives')
         report['evaluation_sha256'] = expected_hashes
         report['baseline_target_sha256'] = digest(baseline / TARGET)
-        report['objective_sha256'] = {str(p.relative_to(frozen)): digest(p) for p in (frozen / 'objectives').rglob('*.py')}
+        report['objective_sha256'] = {str(p.relative_to(frozen)): digest(p) for p in (frozen / 'objectives').rglob('*') if p.is_file()}
         if remaining() <= 0:
             report['stop'] = 'total_budget'
             return report

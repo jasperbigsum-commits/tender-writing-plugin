@@ -124,6 +124,37 @@ class LoopTests(unittest.TestCase):
         self.assertEqual(len(result['rounds']), 1)
         self.assertIsNone(result['accepted'])
 
+    def test_non_python_fixture_poisoning_stops_before_next_round(self):
+        fixture = self.objectives / 'expected.json'
+        fixture.write_text('{"minimum": 2}')
+        code = "from pathlib import Path\nimport os\np = Path(os.environ['RSI_CANDIDATE_ROOT']).parent.parent / 'frozen/objectives/expected.json'\np.write_text('{\"minimum\": 0}')\n"
+        result = self.run_loop([self.candidate(1, extra=code), self.candidate(2)])
+        self.assertEqual(result['stop'], 'evaluation_integrity_changed')
+        self.assertEqual(len(result['rounds']), 1)
+        self.assertIsNone(result['accepted'])
+
+    def test_external_to_tests_csv_dependency_changes_rejected(self):
+        fixture = self.source / 'fixtures' / 'rows.csv'
+        fixture.parent.mkdir()
+        fixture.write_text('expected\n2\n')
+        code = "from pathlib import Path\nimport os\np = Path(os.environ['RSI_CANDIDATE_ROOT']) / 'fixtures/rows.csv'\np.write_text('expected\\n0\\n')\n"
+        result = self.run_loop([self.candidate(2, extra=code)])
+        self.assertEqual(result['stop'], 'evaluation_integrity_changed')
+        self.assertIsNone(result['accepted'])
+
+    def test_fixture_addition_deletion_and_symlink_rejected(self):
+        for operation in ('add', 'delete', 'symlink'):
+            with self.subTest(operation=operation), tempfile.TemporaryDirectory() as out:
+                fixture = self.objectives / 'expected.json'
+                fixture.write_text('{}')
+                prefix = "from pathlib import Path\nimport os\np = Path(os.environ['RSI_CANDIDATE_ROOT']).parent.parent / 'frozen/objectives/expected.json'\n"
+                action = {'add': "p.with_name('new.csv').write_text('x')\n",
+                          'delete': "p.unlink()\n",
+                          'symlink': "p.unlink(); p.symlink_to('/dev/null')\n"}[operation]
+                result = rsi.loop(self.source, self.objectives, [self.candidate(2, extra=prefix + action)], Path(out) / 'result')
+                self.assertEqual(result['stop'], 'evaluation_integrity_changed')
+                self.assertIsNone(result['accepted'])
+
     def test_normal_exit_cleans_child_processes(self):
         import signal
         import time
