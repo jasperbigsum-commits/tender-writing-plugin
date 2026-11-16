@@ -11,6 +11,7 @@
 - [插件使用说明](tender-writing/README.md)：六个技能、文件工具、资料复用和导出边界。
 - [本地命令手册](tender-writing/skills/bid-writing/references/cli.md)和[数据契约](tender-writing/skills/bid-writing/references/data-contract.md)。
 - [验收记录](docs/验收记录.md)：31项测试、Word实际渲染、包校验及未验证范围。
+- [RSI首批迭代](docs/rsi/2026-11-16.md)：最多3轮的递归改进、独立复核、回归证据及待审阅状态。
 
 ## 安装和启用
 
@@ -47,3 +48,5 @@ python tools/build_plugin.py
 示例使用人工构造资料，保留尚未完成的复核阻断项，用来验证状态控制。它不调用外部模型，也不代表真实投标质量。Word最终版式核验与外部项目的实际运行验证单独记录在验收报告。
 
 GitHub Actions在Python 3.10和3.12上运行现有测试与打包校验。CI不调用模型、不使用真实招标资料，也不执行Word桌面渲染。
+
+RSI由当前Codex目标循环逐轮执行，不是常驻服务。`codex/rsi-`分支的CI另核对原31项测试文件与固定基线完全一致；新增回归放在独立文件，改进通过PR审阅后再决定合并和发布。

@@ -4,20 +4,23 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from contextlib import ExitStack
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from difflib import SequenceMatcher
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
+import shutil
 import sys
 import tempfile
 from uuid import uuid4
 import zipfile
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 STATE_FILES = ("project.json", "sources.json", "requirements.json", "evidence.json",
                "outline.json", "responses.json", "draft.json")
 CATEGORIES = ("coverage", "qualification", "consistency", "response", "scoring",
@@ -45,19 +48,21 @@ def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def write_json(path, value):
+def write_bytes(path, value):
     """Atomic replace in the same directory; do not leave half-written state."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent,
-                                     suffix=".tmp", delete=False, newline="\n") as stream:
-        json.dump(value, stream, ensure_ascii=False, indent=2)
-        stream.write("\n")
+    with tempfile.NamedTemporaryFile("wb", dir=path.parent, suffix=".tmp", delete=False) as stream:
+        stream.write(value)
         tmp = Path(stream.name)
     try:
         tmp.replace(path)
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def write_json(path, value):
+    write_bytes(path, (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 
 
 def read_json(path):
@@ -175,6 +180,14 @@ def extract(path):
     return {"format": suffix[1:], "blocks": blocks, "warnings": warnings}
 
 
+def extract_snapshot(root, data, suffix):
+    """Parse the exact bytes that will be archived, even if the input changes."""
+    with tempfile.TemporaryDirectory(prefix=".ingest-", dir=root) as staging:
+        snapshot = Path(staging) / f"document{suffix}"
+        snapshot.write_bytes(data)
+        return extract(snapshot)
+
+
 def ingest(root, file, role):
     root = project_dir(root)
     file = Path(file).resolve(strict=True)
@@ -186,17 +199,45 @@ def ingest(root, file, role):
     sources = read_json(root / "sources.json")
     file_hash = digest(data)
     existing = next((s for s in sources if s["sha256"] == file_hash and s["role"] == role), None)
+    damaged = []
     if existing:
-        return existing
+        for key, checksum in (("path", "sha256"), ("extracted_path", "extracted_sha256")):
+            stored = inside(root, existing[key])
+            if not stored.is_file() or digest(stored.read_bytes()) != existing[checksum]:
+                damaged.append(key)
+        if not damaged and not existing.get("repair_pending"):
+            return existing
     # Parse before copying or registering so unsupported/corrupt files leave no record.
-    extracted = extract(file)
+    extracted = extract_snapshot(root, data, file.suffix.lower())
+    if existing:
+        extracted.update({"source_id": existing["id"], "original_name": existing["name"]})
+        backups = {}
+        attempt = uuid4().hex
+        for key in damaged:
+            stored = inside(root, existing[key])
+            if stored.is_file():
+                relative = f"sources/repair-history/{existing['id']}/{attempt}/{key}{stored.suffix}"
+                write_bytes(inside(root, relative), stored.read_bytes())
+                backups[key] = relative
+        # Persist invalidation before restoring files, so an interrupted repair
+        # cannot silently make an old review current again.
+        existing["review"] = None
+        existing["repair_pending"] = True
+        existing.setdefault("repairs", []).append({"at": now(), "components": damaged, "backups": backups})
+        write_json(root / "sources.json", sources)
+        write_bytes(inside(root, existing["path"]), data)
+        write_json(inside(root, existing["extracted_path"]), extracted)
+        existing["extracted_sha256"] = digest(inside(root, existing["extracted_path"]).read_bytes())
+        existing["repair_pending"] = False
+        write_json(root / "sources.json", sources)
+        return existing
     source_id = f"S{max([int(s['id'][1:]) for s in sources] or [0]) + 1:04d}"
     original = f"sources/originals/{source_id}{file.suffix.lower()}"
     extracted_path = f"sources/extracted/{source_id}.json"
     extracted.update({"source_id": source_id, "original_name": file.name})
     target = inside(root, original)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
+    write_bytes(target, data)
     write_json(inside(root, extracted_path), extracted)
     source = {"id": source_id, "name": file.name, "role": role, "path": original,
               "sha256": file_hash, "extracted_path": extracted_path,
@@ -232,16 +273,17 @@ def library_add(path, file, kind, tags="", valid_until=None):
     file = Path(file).resolve(strict=True)
     if not file.is_file() or file.stat().st_size > 100 * 1024 * 1024:
         raise BidError("请输入不超过 100 MiB 的文件")
-    file_hash = digest(file.read_bytes())
+    snapshot = file.read_bytes()
+    file_hash = digest(snapshot)
     existing = next((item for item in data["items"] if item["sha256"] == file_hash), None)
     if existing:
         return existing
-    extracted = extract(file)
+    extracted = extract_snapshot(path, snapshot, file.suffix.lower())
     item_id = f"L{len(data['items']) + 1:04d}"
     relative = f"originals/{item_id}{file.suffix.lower()}"
     target = inside(path, relative)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(file.read_bytes())
+    write_bytes(target, snapshot)
     write_json(path / "extracted" / f"{item_id}.json", extracted)
     item = {"id": item_id, "name": file.name, "company": data["company"], "kind": kind,
             "tags": [t.strip() for t in tags.split(",") if t.strip()], "valid_until": valid_until,
@@ -412,6 +454,8 @@ def audit(root):
     sources = {s["id"]: s for s in state["sources.json"]}
     extracted = {}
     for sid, s in sources.items():
+        if s.get("repair_pending"):
+            issue("traceability", "SOURCE_REPAIR_PENDING", "blocker", sid, "来源修复尚未完成，请重新导入完整原件以继续修复")
         for key, sha in (("path", "sha256"), ("extracted_path", "extracted_sha256")):
             file = inside(root, s[key])
             if not file.is_file() or digest(file.read_bytes()) != s[sha]:
@@ -683,21 +727,47 @@ def response_matrix(root):
     return "\n".join(lines) + "\n"
 
 
+def remove_created_file(path, identity):
+    """Best-effort rollback without deleting a file replaced by another writer."""
+    try:
+        current = path.stat(follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if (current.st_dev, current.st_ino) == identity:
+        path.unlink(missing_ok=True)
+
+
 def export_document(root, output, mode="draft"):
     root = project_dir(root)
+    state = load_state(root)
+    reviews = read_json(root / "reviews.json")
+    expected_snapshot = fingerprint(root, state)
     result = audit(root)
+
+    def ensure_current():
+        if (result["snapshot"] != expected_snapshot
+                or fingerprint(root) != expected_snapshot
+                or read_json(root / "reviews.json") != reviews):
+            raise BidError("导出期间项目或复核记录已变化，请重新审查当前版本后导出")
+
+    ensure_current()
     if mode == "submission" and result["status"] != "checks_complete":
         raise BidError(f"存在 {result['summary']['blocker']} 个阻断项；先 audit 修复，或以 draft 模式导出")
-    state = load_state(root)
     p = state["project.json"]
     chapters = ordered_chapters(state["outline.json"])
     if not chapters:
         raise BidError("目录为空，无法导出")
     drafts = {d["chapter_id"]: d for d in state["draft.json"]}
+    # Container headings may legitimately have no body. Keep the leaf fallback
+    # below, but never invent a missing-body warning for a heading-only volume.
+    container_ids = {chapter.get("parent_id") for chapter in state["outline.json"]}
+    for chapter_id in container_ids - {None}:
+        drafts.setdefault(chapter_id, {"content": ""})
     output = Path(output).resolve()
     if not output.is_relative_to(root / "outputs"):
         raise BidError("导出文件须位于项目 outputs 目录中")
-    if output.exists() or output.with_suffix(output.suffix + ".receipt.json").exists():
+    receipt_path = output.with_suffix(output.suffix + ".receipt.json")
+    if output.exists() or receipt_path.exists():
         raise BidError("输出文件已存在，请换用新文件名，保留历史版本")
     if output.suffix.lower() not in (".md", ".docx"):
         raise BidError("导出扩展名仅支持 .md 和 .docx")
@@ -714,16 +784,35 @@ def export_document(root, output, mode="draft"):
         lines.extend(["#" * min(depth + 1, 6) + " " + chapter["title"], "",
                       drafts.get(chapter["id"], {}).get("content", "【待填写正文】"), ""])
     output.parent.mkdir(parents=True, exist_ok=True)
-    if output.suffix.lower() == ".md":
-        output.write_text("\n".join(lines), encoding="utf-8")
-    else:
-        write_docx(output, p, chapters, drafts, result, mode)
-    receipt = {"plugin_version": VERSION, "mode": mode, "at": now(),
-               "file": output.name, "sha256": digest(output.read_bytes()),
-               "snapshot": result["snapshot"], "audit_status": result["status"],
-               "review_records": read_json(root / "reviews.json"),
-               "note": "导出成功仅证明文件生成；最终文件须渲染并核对招标格式、附件、签章及提交要求。"}
-    write_json(output.with_suffix(output.suffix + ".receipt.json"), receipt)
+    # Generate the document and receipt together in a private staging directory.
+    # Only copy to the chosen names after generation and version checks succeed.
+    with tempfile.TemporaryDirectory(prefix=".export-", dir=output.parent) as staging:
+        staged_output = Path(staging) / output.name
+        staged_receipt = Path(staging) / receipt_path.name
+        if output.suffix.lower() == ".md":
+            staged_output.write_text("\n".join(lines), encoding="utf-8")
+        else:
+            write_docx(staged_output, p, chapters, drafts, result, mode)
+        ensure_current()
+        receipt = {"plugin_version": VERSION, "mode": mode, "at": now(),
+                   "file": output.name, "sha256": digest(staged_output.read_bytes()),
+                   "snapshot": expected_snapshot, "audit_status": result["status"],
+                   "review_records": reviews,
+                   "note": "导出成功仅证明文件生成；最终文件须渲染并核对招标格式、附件、签章及提交要求。"}
+        write_json(staged_receipt, receipt)
+        ensure_current()
+        # Exclusive creation also protects against a competing writer arriving
+        # after the earlier existence check. Roll back only files we created.
+        with ExitStack() as rollback:
+            for source, target in ((staged_receipt, receipt_path), (staged_output, output)):
+                with target.open("xb") as target_stream:
+                    created_stat = os.fstat(target_stream.fileno())
+                    rollback.callback(remove_created_file, target,
+                                      (created_stat.st_dev, created_stat.st_ino))
+                    with source.open("rb") as source_stream:
+                        shutil.copyfileobj(source_stream, target_stream)
+            ensure_current()
+            rollback.pop_all()
     return output
 
 

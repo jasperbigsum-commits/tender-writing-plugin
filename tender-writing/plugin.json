@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "tender-writing",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "面向中文投标文件的资料沉淀、招标研读、目录编制、逐章写作、证据核验和审查导出工作流。",
   "keywords": ["标书", "投标", "招标研读", "写作", "证据追溯", "tender"],
   "extensions": {

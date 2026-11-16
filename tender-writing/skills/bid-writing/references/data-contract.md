@@ -10,6 +10,8 @@
 
 `sources.json` 由 `ingest` 生成，记录稳定 ID、用途、原件副本及抽取文件的相对路径和 SHA-256。用途 tender/amendment/company/history/bid 分别是招标、澄清、企业证明、历史材料、现有投标文件。抽取文件有 `blocks`，每块含 `locator` 与 `text`。
 
+重复导入完好的相同原件保持ID与复核状态。若项目内原件或抽取副本损坏/丢失，使用完整原件重新导入会保留ID并恢复，仍可读取的损坏副本在项目内 `sources/repair-history/` 留档；`repairs` 记录修复尝试，`repair_pending` 标记尚未完成的恢复。修复使旧复核失效，原件核对与专项复核需重新完成。企业资料库入库和项目导入都从一次读取的字节快照解析，保证归档、抽取与哈希对应同一版本。
+
 定位例子：`line:12`、`page:3`、`paragraph:6`、`table:1:row:2`。DOCX 定位不表示页码。原文引用一律采用：
 
 ```json
@@ -62,7 +64,7 @@ kind 建议 certificate、case、person、product、module。status 只取 verif
 ]
 ```
 
-ID 不随标题或顺序变化；parent_id 表示树形结构。所有强制要求都要映射，所有叶子章节都要有正文。
+ID 不随标题或顺序变化；parent_id 表示树形结构。所有强制要求都要映射，所有叶子章节都要有正文。纯目录容器可仅有标题，导出不为这类容器新增待填内容；缺失叶子正文仍在草稿中标待填并阻止提交版导出。
 
 ## 响应 responses.json
 
@@ -96,3 +98,5 @@ status 可取 satisfied/partial/deviation/missing/unknown。satisfied 不是默�
 `reviews.json` 通过 `review` 命令记录 semantic/format/signature/similarity 专项复核。记录含当前数据和来源文件的指纹、真实检查人、范围、发现及说明。原件核对通过 `review-source` 单独记录。数据一经变化专项复核失效，不能自动沿用。
 
 `audit` 退出码：0 为基础检查及记录齐备；2 为有阻断事项；1 为输入或执行错误。状态 `checks_complete` 仅代表该检查范围完成。`outputs` 存放审查报告、响应矩阵、导出文档及哈希回执。回执不构成签名或法律认证。
+
+导出绑定初始项目指纹和复核记录，期间变化会中止。文件与回执先暂存，再以独占创建写入选定名称；普通失败尽力清理本次创建且身份未变化的文件。两文件不构成原子事务，强制终止或硬件故障后需要核对文件及回执哈希，不自动视为成功。
