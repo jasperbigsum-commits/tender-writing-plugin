@@ -13,6 +13,8 @@ python "<PLUGIN_ROOT>/skills/bid-writing/scripts/bidflow.py" ingest --project ".
 
 `--as-of` 须用本项目实际适用的日期；示例日期没有业务效力。支持 UTF-8 TXT/MD、DOCX、PDF，每件最多100 MiB。旧DOC、XLSX参数表和图像需用宿主能力转换为可读、可追溯资料。扫描PDF不会自动OCR，抽取为空始终保留阻断项。
 
+导入读取一份固定字节快照进行解析与归档。相同内容和用途的完整副本重复导入保持幂等；出现 `SOURCE_CHANGED` 时可用完整原件按相同用途重新执行 `ingest`。修复保留来源ID、备份损坏副本、使旧复核失效；出现 `SOURCE_REPAIR_PENDING` 表示上次修复未完成，重复导入可继续恢复。修复后重新核对原件、响应与相关专项结果，不能直接沿用旧通过记录。
+
 模型读取全部抽取块和原件，按契约填写 requirements/evidence/outline/responses/draft；脚本不调用大模型、不自动填这些台账。原件解析限制核对完毕后记录：
 
 ```powershell
@@ -49,5 +51,7 @@ python "<PLUGIN_ROOT>/skills/bid-writing/scripts/bidflow.py" review --project ".
 kind 可取 semantic/format/signature/similarity；status 可取 pass/issue/not_applicable，其中 semantic 和 format 必须实际通过。记录本身不执行检查。当前版本齐备后才能 `--mode submission`；文件仍须最终渲染、人工完成相应签章与递交。对版式验收有专门技能的宿主优先使用其文档渲染工具。
 
 只支持 `.md` / `.docx` 输出，须位于项目的 `outputs` 子目录。现有文件或回执不会覆盖，每次用新版本文件名。DOCX 提供黑白A4、标题层级、静态目录和简单表格；不自动保留招标原制式表格、复杂图文、签章或动态页码。复杂格式按招标模板用宿主文档工具处理，完成后重新核验。
+
+导出期间改动项目或撤销复核会中止，应重新审查当前版本后再导出。纯目录容器仅输出标题；缺失叶子正文保留待填并阻止提交版。普通文件写入失败会尽力撤销本次创建的结果，已存在或被其他任务替换的文件保留。进程被强制关闭等异常后，仍须检查文件和回执，不能仅凭文件出现判断成功。
 
 每次导出生成 `.receipt.json`，记录文件SHA-256、来源状态指纹和检查记录。需要PDF时用宿主已授权转换能力从最终Word另行输出并核对，两种格式的文件哈希分别管理。
