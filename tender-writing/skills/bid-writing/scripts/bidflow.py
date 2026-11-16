@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from contextlib import ExitStack
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from difflib import SequenceMatcher
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
+import shutil
 import sys
 import tempfile
 from uuid import uuid4
@@ -683,12 +686,32 @@ def response_matrix(root):
     return "\n".join(lines) + "\n"
 
 
+def remove_created_file(path, identity):
+    """Best-effort rollback without deleting a file replaced by another writer."""
+    try:
+        current = path.stat(follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if (current.st_dev, current.st_ino) == identity:
+        path.unlink(missing_ok=True)
+
+
 def export_document(root, output, mode="draft"):
     root = project_dir(root)
+    state = load_state(root)
+    reviews = read_json(root / "reviews.json")
+    expected_snapshot = fingerprint(root, state)
     result = audit(root)
+
+    def ensure_current():
+        if (result["snapshot"] != expected_snapshot
+                or fingerprint(root) != expected_snapshot
+                or read_json(root / "reviews.json") != reviews):
+            raise BidError("导出期间项目或复核记录已变化，请重新审查当前版本后导出")
+
+    ensure_current()
     if mode == "submission" and result["status"] != "checks_complete":
         raise BidError(f"存在 {result['summary']['blocker']} 个阻断项；先 audit 修复，或以 draft 模式导出")
-    state = load_state(root)
     p = state["project.json"]
     chapters = ordered_chapters(state["outline.json"])
     if not chapters:
@@ -702,7 +725,8 @@ def export_document(root, output, mode="draft"):
     output = Path(output).resolve()
     if not output.is_relative_to(root / "outputs"):
         raise BidError("导出文件须位于项目 outputs 目录中")
-    if output.exists() or output.with_suffix(output.suffix + ".receipt.json").exists():
+    receipt_path = output.with_suffix(output.suffix + ".receipt.json")
+    if output.exists() or receipt_path.exists():
         raise BidError("输出文件已存在，请换用新文件名，保留历史版本")
     if output.suffix.lower() not in (".md", ".docx"):
         raise BidError("导出扩展名仅支持 .md 和 .docx")
@@ -719,16 +743,35 @@ def export_document(root, output, mode="draft"):
         lines.extend(["#" * min(depth + 1, 6) + " " + chapter["title"], "",
                       drafts.get(chapter["id"], {}).get("content", "【待填写正文】"), ""])
     output.parent.mkdir(parents=True, exist_ok=True)
-    if output.suffix.lower() == ".md":
-        output.write_text("\n".join(lines), encoding="utf-8")
-    else:
-        write_docx(output, p, chapters, drafts, result, mode)
-    receipt = {"plugin_version": VERSION, "mode": mode, "at": now(),
-               "file": output.name, "sha256": digest(output.read_bytes()),
-               "snapshot": result["snapshot"], "audit_status": result["status"],
-               "review_records": read_json(root / "reviews.json"),
-               "note": "导出成功仅证明文件生成；最终文件须渲染并核对招标格式、附件、签章及提交要求。"}
-    write_json(output.with_suffix(output.suffix + ".receipt.json"), receipt)
+    # Generate the document and receipt together in a private staging directory.
+    # Only copy to the chosen names after generation and version checks succeed.
+    with tempfile.TemporaryDirectory(prefix=".export-", dir=output.parent) as staging:
+        staged_output = Path(staging) / output.name
+        staged_receipt = Path(staging) / receipt_path.name
+        if output.suffix.lower() == ".md":
+            staged_output.write_text("\n".join(lines), encoding="utf-8")
+        else:
+            write_docx(staged_output, p, chapters, drafts, result, mode)
+        ensure_current()
+        receipt = {"plugin_version": VERSION, "mode": mode, "at": now(),
+                   "file": output.name, "sha256": digest(staged_output.read_bytes()),
+                   "snapshot": expected_snapshot, "audit_status": result["status"],
+                   "review_records": reviews,
+                   "note": "导出成功仅证明文件生成；最终文件须渲染并核对招标格式、附件、签章及提交要求。"}
+        write_json(staged_receipt, receipt)
+        ensure_current()
+        # Exclusive creation also protects against a competing writer arriving
+        # after the earlier existence check. Roll back only files we created.
+        with ExitStack() as rollback:
+            for source, target in ((staged_receipt, receipt_path), (staged_output, output)):
+                with target.open("xb") as target_stream:
+                    created_stat = os.fstat(target_stream.fileno())
+                    rollback.callback(remove_created_file, target,
+                                      (created_stat.st_dev, created_stat.st_ino))
+                    with source.open("rb") as source_stream:
+                        shutil.copyfileobj(source_stream, target_stream)
+            ensure_current()
+            rollback.pop_all()
     return output
 
 
