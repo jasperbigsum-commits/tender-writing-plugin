@@ -1,7 +1,7 @@
 {
-  "archive": "dist/tender-writing-0.1.2.zip",
-  "sha256": "7fc60ff85479c613ec225f8a3d748645854459b9252c899c7ceef2bf231ae487",
-  "version": "0.1.2",
+  "archive": "dist/tender-writing-0.1.3.zip",
+  "sha256": "1078f9d5c3ec9f8ffee0afb428bf577e053ff4bb3f517de726fe0cd68a921121",
+  "version": "0.1.3",
   "skills": [
     "bid-drafting",
     "bid-outline",
@@ -10,9 +10,11 @@
     "company-library",
     "tender-reading"
   ],
-  "files": 25,
-  "bytes": 42990,
+  "files": 26,
+  "bytes": 55410,
   "subtitle_characters": 15,
   "validation": "passed",
-  "host_installation": "not_performed"
+  "host_installation": "not_performed",
+  "public_submission": "not_submitted",
+  "validation_scope": "local structural checks, not official schema or portal approval"
 }

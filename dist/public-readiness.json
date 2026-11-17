@@ -1,0 +1,21 @@
+{
+  "package_errors": [],
+  "public_submission_ready": false,
+  "status": "pending_external_review",
+  "external_checks": [
+    "verified publisher identity and policy attestations",
+    "official skill safety/security scans",
+    "clean desktop installation and six-skill workflow smoke test in target host (CLI installation previously passed)",
+    "owner country targeting and commerce declarations",
+    "public English listing/localization review before submission",
+    "developerName: populate from selected verified identity, never invent"
+  ],
+  "recommended_listing_materials": [
+    "websiteURL: not supplied; optional for skills-only ZIP, required for remote MCP",
+    "supportURL: not supplied; optional for skills-only ZIP, required for remote MCP",
+    "privacyPolicyURL: not supplied; optional for skills-only ZIP, required for remote MCP",
+    "termsOfServiceURL: not supplied; optional for skills-only ZIP, required for remote MCP"
+  ],
+  "submitted": false,
+  "note": "Offline checks are not OpenAI approval. No network or portal actions performed."
+}
