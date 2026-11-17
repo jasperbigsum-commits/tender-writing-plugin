@@ -1,6 +1,6 @@
 {
   "name": "tender-writing",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "中文标书研读、资料复用、目录与正文写作、审查导出工作流。",
   "skills": "./skills/",
   "interface": {
