@@ -1,12 +1,12 @@
 {
   "name": "tender-writing",
-  "version": "0.1.3",
-  "description": "中文标书研读、资料复用、目录与正文写作、审查导出工作流。",
+  "version": "0.1.4",
+  "description": "Local workflows for analyzing, drafting, checking, and exporting Chinese tender documents.",
   "skills": "./skills/",
   "interface": {
-    "displayName": "标书写作工作台",
-    "shortDescription": "从招标研读到逐章写作与审查导出",
-    "longDescription": "提供六个协作技能和本地文件工具，整理企业资料，建立带原文定位的招标要求台账，将要求映射到投标目录和正文，执行九类基础检查并导出 Word。研读和写作由当前会话模型完成。扫描件需要另行 OCR；语义、签章和版式检查需要实际核验。",
+    "displayName": "Chinese Tender Writing",
+    "shortDescription": "Draft and review Chinese bids",
+    "longDescription": "Six skills and local file tools for Chinese tender documents: organize company materials, record tender requirements with source locations, map requirements to bid outlines and sections, run nine basic checks, and export Word documents. The current conversation model performs analysis and drafting. Scanned documents need separate OCR; semantic accuracy, signatures, seals, and layout require verification. Requires a local executor.",
     "category": "Business & Operations",
     "capabilities": [
       "Read",
@@ -15,10 +15,27 @@
     "logo": "./assets/icon.png",
     "composerIcon": "./assets/icon.png",
     "defaultPrompt": [
-      "请根据我提供的招标文件，建立标书项目，先输出招标研读和投标准备清单，再生成目录并逐章写作。",
-      "请整理企业资质和历史标书，建立带来源、有效期和适用范围的企业资料库。",
-      "请审查这份投标文件，逐项给出招标依据、投标响应位置、证据缺口和修改建议。"
-    ]
+      "Analyze this Chinese tender, list requirements with source locations, then draft an outline and sections.",
+      "Organize company qualifications and past bids with sources, validity dates, and scope of use.",
+      "Review this Chinese bid for requirement coverage, response locations, evidence gaps, and suggested corrections."
+    ],
+    "developerName": "jasper"
   },
-  "requires_local_executor": true
+  "requires_local_executor": true,
+  "extensions": {
+    "com.openai": {
+      "publication": {
+        "release_notes": "Add owner-selected jasper author and developer display metadata, English base listing with Chinese translations, and stricter offline identity checks. Six local skills are unchanged. Not submitted to the OpenAI directory.",
+        "translations": {
+          "zh-CN": {
+            "subtitle": "从招标研读到逐章写作与审查导出",
+            "description": "提供六个协作技能和本地文件工具，整理企业资料，建立带原文定位的招标要求台账，将要求映射到投标目录和正文，执行九类基础检查并导出 Word。研读和写作由当前会话模型完成。扫描件需要另行 OCR；语义、签章和版式检查需要实际核验。"
+          }
+        }
+      }
+    }
+  },
+  "author": {
+    "name": "jasper"
+  }
 }

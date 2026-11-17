@@ -7,8 +7,7 @@
     "official skill safety/security scans",
     "clean desktop installation and six-skill workflow smoke test in target host (CLI installation previously passed)",
     "owner country targeting and commerce declarations",
-    "public English listing/localization review before submission",
-    "developerName: populate from selected verified identity, never invent"
+    "public English listing/localization review before submission"
   ],
   "recommended_listing_materials": [
     "websiteURL: not supplied; optional for skills-only ZIP, required for remote MCP",

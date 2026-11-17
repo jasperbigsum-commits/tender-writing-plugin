@@ -90,3 +90,44 @@ class PublicPackageTests(unittest.TestCase):
     def test_codex_false_executor_rejected(self):
         result = self.inspect(compat_change=lambda d: d.update(requires_local_executor=False))
         self.assertTrue(any('Codex manifest' in e for e in result['package_errors']))
+
+    def test_english_base_and_chinese_translation(self):
+        m=json.loads((ROOT/'tender-writing/plugin.json').read_text())
+        o=m['extensions']['com.openai']
+        self.assertIn('Chinese', o['interface']['displayName'])
+        self.assertLessEqual(len(o['interface']['shortDescription']), 30)
+        self.assertIn('zh-CN', o['publication']['translations'])
+        self.assertLessEqual(len(o['publication']['translations']['zh-CN']['subtitle']), 30)
+
+    def test_synthetic_identity_resolves_local_identity_errors(self):
+        def portable(d):
+            d['author']={'name':'Synthetic Test Publisher'}
+            d['extensions']['com.openai']['interface']['developerName']='Synthetic Test Publisher'
+        def codex(d):
+            d['author']={'name':'Synthetic Test Publisher'}
+            d['interface']['developerName']='Synthetic Test Publisher'
+        result=self.inspect(portable, compat_change=codex)
+        self.assertEqual([], result['package_errors'])
+        self.assertFalse(result['public_submission_ready'])
+
+    def test_missing_portable_identity_rejected(self):
+        def remove(d):
+            d.pop('author')
+            d['extensions']['com.openai']['interface'].pop('developerName')
+        errors = self.inspect(remove)['package_errors']
+        self.assertEqual(2, len(errors))
+        self.assertTrue(all('publisher identity required' in e for e in errors))
+
+    def test_missing_codex_identity_rejected(self):
+        def remove(d):
+            d.pop('author')
+            d['interface'].pop('developerName')
+        self.assertEqual(2, len(self.inspect(compat_change=remove)['package_errors']))
+
+    def test_owner_selected_identity_is_synchronized(self):
+        for path in ['plugin.json', '.codex-plugin/plugin.json', '.claude-plugin/plugin.json']:
+            d=json.loads((ROOT/'tender-writing'/path).read_text())
+            self.assertEqual({'name': 'jasper'}, d['author'])
+            self.assertEqual('0.1.4', d['version'])
+        m=json.loads((ROOT/'tender-writing/plugin.json').read_text())
+        self.assertEqual('jasper', m['extensions']['com.openai']['interface']['developerName'])

@@ -39,12 +39,27 @@ def inspect_archive(archive):
             return _report(['missing portable manifest'], pending, recommended)
         m = json.loads(z.read(f'{root}/plugin.json'))
         interface = m.get('extensions', {}).get('com.openai', {}).get('interface', {})
+        # Required public-upload identity fields must not be misreported as
+        # merely external checks. Do not invent values for an unknown publisher.
+        for label, doc, listing in [('portable', m, interface)]:
+            author = doc.get('author')
+            if not isinstance(author, dict) or not isinstance(author.get('name'), str) or not author['name'].strip():
+                errors.append(f'{label}: missing or invalid author.name; owner publisher identity required')
+            developer = listing.get('developerName')
+            if not isinstance(developer, str) or not developer.strip() or len(developer) > 80:
+                errors.append(f'{label}: missing or invalid interface.developerName; owner publisher identity required')
         # This package's primary workflows call bundled Python file tools.
         if m.get('extensions', {}).get('com.openai', {}).get('requires_local_executor') is not True:
             errors.append('local workflows require requires_local_executor=true in portable manifest')
         compat_path = f'{root}/.codex-plugin/plugin.json'
         if compat_path in names:
             compat = json.loads(z.read(compat_path))
+            author = compat.get('author')
+            if not isinstance(author, dict) or not isinstance(author.get('name'), str) or not author['name'].strip():
+                errors.append('Codex: missing or invalid author.name; owner publisher identity required')
+            developer = compat.get('interface', {}).get('developerName')
+            if not isinstance(developer, str) or not developer.strip() or len(developer) > 80:
+                errors.append('Codex: missing or invalid interface.developerName; owner publisher identity required')
             if compat.get('requires_local_executor') is not True:
                 errors.append('local workflows require requires_local_executor=true in Codex manifest')
         for name in names:
