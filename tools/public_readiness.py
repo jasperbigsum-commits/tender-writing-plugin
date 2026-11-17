@@ -17,7 +17,7 @@ URL_FIELDS = ('websiteURL', 'supportURL', 'privacyPolicyURL', 'termsOfServiceURL
 def inspect_archive(archive):
     errors = []
     pending = ['verified publisher identity and policy attestations',
-               'official skill safety/security scans', 'installation and six-skill smoke test in target host',
+               'official skill safety/security scans', 'clean desktop installation and six-skill workflow smoke test in target host (CLI installation previously passed)',
                'owner country targeting and commerce declarations',
                'public English listing/localization review before submission']
     recommended = []
@@ -39,6 +39,14 @@ def inspect_archive(archive):
             return _report(['missing portable manifest'], pending, recommended)
         m = json.loads(z.read(f'{root}/plugin.json'))
         interface = m.get('extensions', {}).get('com.openai', {}).get('interface', {})
+        # This package's primary workflows call bundled Python file tools.
+        if m.get('extensions', {}).get('com.openai', {}).get('requires_local_executor') is not True:
+            errors.append('local workflows require requires_local_executor=true in portable manifest')
+        compat_path = f'{root}/.codex-plugin/plugin.json'
+        if compat_path in names:
+            compat = json.loads(z.read(compat_path))
+            if compat.get('requires_local_executor') is not True:
+                errors.append('local workflows require requires_local_executor=true in Codex manifest')
         for name in names:
             if name.endswith('/.app.json'):
                 errors.append('public upload must not contain .app.json')

@@ -40,7 +40,8 @@
       },
       "publication": {
         "release_notes": "Align portable and Codex compatibility metadata, add a standard repository marketplace, PNG assets, and separate package validation from public submission readiness. Existing six skills and local file workflows are unchanged."
-      }
+      },
+      "requires_local_executor": true
     }
   }
 }

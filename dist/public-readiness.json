@@ -5,7 +5,7 @@
   "external_checks": [
     "verified publisher identity and policy attestations",
     "official skill safety/security scans",
-    "installation and six-skill smoke test in target host",
+    "clean desktop installation and six-skill workflow smoke test in target host (CLI installation previously passed)",
     "owner country targeting and commerce declarations",
     "public English listing/localization review before submission",
     "developerName: populate from selected verified identity, never invent"

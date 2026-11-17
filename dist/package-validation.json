@@ -1,6 +1,6 @@
 {
   "archive": "dist/tender-writing-0.1.3.zip",
-  "sha256": "014f658c652d1ca0960225323779338a5900f24f234ae8525da82bbbcba07c9b",
+  "sha256": "1078f9d5c3ec9f8ffee0afb428bf577e053ff4bb3f517de726fe0cd68a921121",
   "version": "0.1.3",
   "skills": [
     "bid-drafting",
@@ -11,7 +11,7 @@
     "tender-reading"
   ],
   "files": 26,
-  "bytes": 55362,
+  "bytes": 55410,
   "subtitle_characters": 15,
   "validation": "passed",
   "host_installation": "not_performed",

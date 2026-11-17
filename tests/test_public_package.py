@@ -13,7 +13,7 @@ spec.loader.exec_module(p)
 
 
 class PublicPackageTests(unittest.TestCase):
-    def inspect(self, change=None, extra=None):
+    def inspect(self, change=None, extra=None, compat_change=None):
         with tempfile.TemporaryDirectory() as folder:
             archive = Path(folder)/'test.zip'
             with zipfile.ZipFile(archive, 'w') as z:
@@ -24,6 +24,8 @@ class PublicPackageTests(unittest.TestCase):
                     name = 'tender-writing/'+path.relative_to(ROOT/'tender-writing').as_posix()
                     if name == 'tender-writing/plugin.json' and change:
                         doc = json.loads(data); change(doc); data = json.dumps(doc).encode()
+                    if name == 'tender-writing/.codex-plugin/plugin.json' and compat_change:
+                        doc = json.loads(data); compat_change(doc); data = json.dumps(doc).encode()
                     z.writestr(name, data)
                 for name, data in (extra or {}).items():
                     z.writestr(name, data)
@@ -68,3 +70,23 @@ class PublicPackageTests(unittest.TestCase):
         self.assertEqual(m['version'], c['version'])
         self.assertEqual(m['extensions']['com.openai']['interface'], c['interface'])
         self.assertEqual((ROOT/'.agents/plugins/marketplace.json').read_bytes(), (ROOT/'.claude-plugin/marketplace.json').read_bytes())
+
+    def test_local_executor_required(self):
+        result = self.inspect(lambda d: d['extensions']['com.openai'].pop('requires_local_executor'))
+        self.assertTrue(any('local workflows require' in e for e in result['package_errors']))
+
+    def test_local_executor_not_string(self):
+        result = self.inspect(lambda d: d['extensions']['com.openai'].update(requires_local_executor='true'))
+        self.assertTrue(any('local workflows require' in e for e in result['package_errors']))
+
+    def test_codex_local_executor_flag(self):
+        c = json.loads((ROOT/'tender-writing/.codex-plugin/plugin.json').read_text())
+        self.assertIs(c['requires_local_executor'], True)
+
+    def test_codex_missing_executor_rejected(self):
+        result = self.inspect(compat_change=lambda d: d.pop('requires_local_executor'))
+        self.assertTrue(any('Codex manifest' in e for e in result['package_errors']))
+
+    def test_codex_false_executor_rejected(self):
+        result = self.inspect(compat_change=lambda d: d.update(requires_local_executor=False))
+        self.assertTrue(any('Codex manifest' in e for e in result['package_errors']))
