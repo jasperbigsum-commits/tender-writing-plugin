@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import zipfile
+from public_readiness import inspect_archive
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "tender-writing"
@@ -48,9 +49,7 @@ def main():
         data = load(PLUGIN / compat / "plugin.json")
         assert data["name"] == name and data["version"] == version
         if compat == ".codex-plugin":
-            assert data["interface"]["category"] == interface["category"]
-            assert data["interface"]["shortDescription"] == interface["shortDescription"]
-            assert data["interface"]["defaultPrompt"] == interface["defaultPrompt"]
+            assert data["interface"] == interface, "compatibility presentation drift"
     skills = []
     for path in sorted((PLUGIN / "skills").glob("*/SKILL.md")):
         text = path.read_text(encoding="utf-8")
@@ -85,7 +84,8 @@ def main():
                 assert target.is_relative_to(PLUGIN.resolve()), f"outside link: {path}: {link}"
                 assert target.is_file(), f"broken link: {path}: {link}"
         files.append(path)
-    catalog = load(ROOT / ".claude-plugin/marketplace.json")
+    catalog = load(ROOT / ".agents/plugins/marketplace.json")
+    assert catalog == load(ROOT / ".claude-plugin/marketplace.json"), "marketplace mirror drift"
     entry = catalog["plugins"][0]
     assert entry["name"] == name and entry["source"]["path"] == f"./{name}"
     assert entry["policy"] == {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
@@ -109,12 +109,16 @@ def main():
         assert saved == manifest
         for skill in skills:
             frontmatter(stream.read(f"{name}/skills/{skill}/SKILL.md").decode("utf-8"))
+    readiness = inspect_archive(archive)
+    assert not readiness["package_errors"], readiness["package_errors"]
+    (destination / "public-readiness.json").write_text(json.dumps(readiness, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     sha = hashlib.sha256(archive.read_bytes()).hexdigest()
     (destination / f"{name}-{version}.sha256").write_text(f"{sha}  {archive.name}\n", encoding="ascii")
     result = {"archive": archive.relative_to(ROOT).as_posix(), "sha256": sha, "version": version, "skills": skills,
               "files": len(files), "bytes": archive.stat().st_size,
               "subtitle_characters": len(interface["shortDescription"]), "validation": "passed",
-              "host_installation": "not_performed"}
+              "host_installation": "not_performed", "public_submission": "not_submitted",
+              "validation_scope": "local structural checks, not official schema or portal approval"}
     (destination / "package-validation.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

@@ -13,9 +13,11 @@
 - [验收记录](docs/验收记录.md)：31项测试、Word实际渲染、包校验及未验证范围。
 - [RSI首批迭代](docs/rsi/2026-11-16.md)：最多3轮的递归改进、独立复核、回归证据及待审阅状态。
 
+- [公共插件设计与上架边界](docs/公共插件设计.md)：Agent Plugins 1.0、Codex 兼容清单及公开分发待办。
+
 ## 安装和启用
 
-项目根目录已提供 `.claude-plugin/marketplace.json` 本地目录清单，指向 `tender-writing/`。此布局属于Codex支持的兼容本地市场布局，路径相对本项目根目录解析。[官方插件打包说明](https://developers.openai.com/plugins/build/plugins)
+项目提供标准 `.agents/plugins/marketplace.json` 仓库市场，指向 `tender-writing/`；`.claude-plugin/marketplace.json` 保留为兼容镜像。路径相对市场根目录（本仓库）解析。[官方插件打包说明](https://developers.openai.com/plugins/build/plugins)
 
 克隆项目后安装本地插件：
 
