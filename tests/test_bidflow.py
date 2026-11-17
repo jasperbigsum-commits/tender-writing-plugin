@@ -16,10 +16,10 @@ spec.loader.exec_module(b)
 
 class BidflowTests(unittest.TestCase):
     def setUp(self):
-        (ROOT / "tmp").mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(prefix="bidflow-test-", dir=ROOT / "tmp")
+        # Use the evaluation-owned scratch area (TMPDIR), never the frozen repo.
+        self.tmp = tempfile.TemporaryDirectory(prefix="bidflow-test-")
         self.folder = Path(self.tmp.name).resolve()
-        self.assertTrue(self.folder.is_relative_to((ROOT / "tmp").resolve()))
+        self.assertTrue(self.folder.is_relative_to(Path(tempfile.gettempdir()).resolve()))
         self.project = b.initialize(self.folder / "project", "示例运维项目", "示例甲公司", "whole", "2026-12-01")
 
     def tearDown(self):

@@ -1,5 +1,5 @@
 {
   "name": "tender-writing",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "中文投标文件写作工作流，支持招标研读、资料复用、目录与正文编制、风险审查和 Word 导出。"
 }
